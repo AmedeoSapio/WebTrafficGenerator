@@ -7,7 +7,6 @@ import numpy as np
 import random
 import time
 import matplotlib.pyplot as plt
-from scipy.interpolate import interp1d
 from multiprocessing import Queue, cpu_count
 
 from browsermobproxy import Server
@@ -15,6 +14,7 @@ from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
 
 from browser import Browser
+from utils import *
 
 class WebTrafficGenerator:
     
@@ -72,9 +72,7 @@ class WebTrafficGenerator:
                 
                 self.thinking_times.append(think_time)
         
-        self.compute_cdf()
-        self.plot_cdf()
-        self.plot_inverse_cdf()
+        self.cdf, self.inverse_cdf, self.cdf_samples = compute_cdf(self.thinking_times)
         
         print ("Number of URLs: ",len(self.urls))
         
@@ -89,6 +87,22 @@ class WebTrafficGenerator:
                 
                 if os.path.isfile(file_path):
                     os.remove(file_path)
+
+        # Create or clean statistics folder
+        
+        if not os.path.exists("Statistics"):
+            os.makedirs("Statistics")
+        else:
+            for file in os.listdir("Statistics"):
+                
+                file_path = os.path.join("Statistics", file)
+                
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+
+        # Plot history statistics
+        self.plot_thinking_time_cdf()
+        self.plot_thinking_time_inverse_cdf()
         
         # Start Proxy
         self.server = Server(self.browser_mob_proxy_location)
@@ -135,26 +149,7 @@ class WebTrafficGenerator:
             self.queue.close()
             self.server.stop()
 
-    def compute_cdf(self):
-
-        data_size=len(self.thinking_times)
-    
-        # Set bins edges
-        data_set=sorted(set(self.thinking_times))
-        bins=np.append(data_set, data_set[-1]+1)
-    
-        # Use the histogram function to bin the data
-        counts, bin_edges = np.histogram(self.thinking_times, bins=bins, density=False)
-    
-        counts=counts.astype(float)/data_size
-    
-        # Find the cdf
-        self.cdf_samples = np.cumsum(counts)
-    
-        self.cdf = interp1d(bin_edges[0:-1], self.cdf_samples)
-        self.inverse_cdf = interp1d(self.cdf_samples,bin_edges[0:-1])
-        
-    def plot_cdf(self):
+    def plot_thinking_time_cdf(self):
         
         x = np.linspace(min(self.thinking_times), max(self.thinking_times), num=1000, endpoint=True)
     
@@ -167,9 +162,9 @@ class WebTrafficGenerator:
         plt.title("Thinking time")
         plt.grid(True)
     
-        plt.savefig("cdf_thinking_time.png")
+        plt.savefig("Statistics/thinking_time_cdf.png")
 
-    def plot_inverse_cdf(self):
+    def plot_thinking_time_inverse_cdf(self):
         
         x = np.linspace(min(self.cdf_samples), max(self.cdf_samples), num=1000, endpoint=True)
         
@@ -181,7 +176,7 @@ class WebTrafficGenerator:
         plt.title("Thinking time")
         plt.grid(True)
     
-        plt.savefig("inverse_cdf_thinking_time.png")
+        plt.savefig("Statistics/thinking_time_inverse_cdf.png")
    
     def get_thinking_time(self):
         

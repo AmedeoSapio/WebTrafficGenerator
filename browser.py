@@ -19,7 +19,7 @@ class Browser(Process):
         self.save_headers = save_headers
         
         filename,ext=os.path.splitext(out_file_name)
-        self.out_file = filename+str(id)+ext
+        self.out_file = filename+"_"+str(id)+ext
         
     def run(self):
         
@@ -38,29 +38,32 @@ class Browser(Process):
         
         try:
             
-            with open(self.out_file,"a") as f:
+            hars=[]
+             
+            url = self.queue.get()
+            
+            while url:
+                
+                counter+=1
+                
+                self.proxy.new_har(ref=url, options={"captureHeaders": self.save_headers})
+                
+                print("Requesting: ", url)
+                
+                try:
+                    
+                    self.driver.get(url)
+                    
+                except TimeoutException:
+                    print ("Request timed out")
+                
+                hars.append(self.proxy.har)
                 
                 url = self.queue.get()
-                
-                while url:
-                    
-                    counter+=1
-                    
-                    self.proxy.new_har(ref=url, options={"captureHeaders": self.save_headers})
-                    
-                    print("Requesting: ", url)
-                    
-                    try:
-                        
-                        self.driver.get(url)
-                        
-                    except TimeoutException:
-                        print ("Request timed out")
-                    
-                    json.dump(self.proxy.har,f)
-                    
-                    url = self.queue.get()
         
+            with open(self.out_file,"a") as f:
+                json.dump(hars,f)
+
         except KeyboardInterrupt:
             pass
                     
