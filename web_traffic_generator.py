@@ -1,197 +1,218 @@
 #!/usr/bin/python3
 
-#Dependancies
-# Install BrowserMob Proxy from https://bmp.lightbody.net/ in current directory
-# sudo pip3 install selenium
-# sudo pip3 install browsermob-proxy
-
 import json
-import sys
-import random
-import time
 import argparse
 import os
-import subprocess
+import numpy as np
+import random
+import time
+import matplotlib.pyplot as plt
+from scipy.interpolate import interp1d
+from multiprocessing import Queue, cpu_count
+
 from browsermobproxy import Server
 from selenium import webdriver
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.common.keys import Keys
-from urllib.parse import urlparse
-from real_thinking_time import random_thinking_time
-import concurrent.futures
+from selenium.common.exceptions import TimeoutException
 
-browser = "firefox"
-browser_mob_proxy_location=os.environ["BROWSERMOBPROXY_BIN"]
-timeout = 30
-backoff = 0
-save_headers=False
-debug = 0
+from browser import Browser
 
-def main():
+class WebTrafficGenerator:
     
-    global backoff
-    global timeout
-    global save_headers
+    def __init__(self,args):
+        
+        self.browser_mob_proxy_location = os.environ.get("BROWSERMOBPROXY_BIN")
+        
+        if not self.browser_mob_proxy_location:
+            self.browser_mob_proxy_location = "./browsermob-proxy/bin/browsermob-proxy"
+        
+        # Parse arguments
+        self.urls_file = args['in_file']
+        
+        self.out_file_name = os.path.join("HAR_files",args['out_file'])
+        
+        self.timeout = args['timeout']
+        
+        self.save_headers = args['headers']
+
+        self.max_interval = args['max_interval']
+        
+        self.browsers_num = args['browsers']
+
+        self.max_requests = args['limit_urls']
+    
+    def run(self):
+        
+        # Read URLs and time
+        
+        in_filename,in_ext=os.path.splitext(self.urls_file)
+        
+        with open(self.urls_file ,"r") as f:
+            
+            self.urls=[]
+            self.thinking_times=[]
+            
+            visit_timestamps=[]
+            
+            history=json.load(f)
+
+        for entry in history:
+            self.urls.append(entry["url"])
+            visit_timestamps.append(entry["lastVisitTime"])
+        
+        if not self.max_requests:
+            self.max_requests = len(self.urls)
+
+        visit_timestamps.sort()
+        
+        for i in range(1, len(visit_timestamps)):
+            
+            think_time=(visit_timestamps[i]-visit_timestamps[i-1])/1000
+            
+            if think_time<=self.max_interval:
+                
+                self.thinking_times.append(think_time)
+        
+        self.compute_cdf()
+        self.plot_cdf()
+        self.plot_inverse_cdf()
+        
+        print ("Number of URLs: ",len(self.urls))
+        
+        # Create or clean HARs folder
+        
+        if not os.path.exists("HAR_files"):
+            os.makedirs("HAR_files")
+        else:
+            for file in os.listdir("HAR_files"):
+                
+                file_path = os.path.join("HAR_files", file)
+                
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+        
+        # Start Proxy
+        self.server = Server(self.browser_mob_proxy_location)
+        
+        self.server.start()
+        
+        # start queue 
+        self.queue = Queue()
+        
+        try:
+            
+            self.workers = [Browser(i, self.server,
+                                    self.queue, self.timeout, 
+                                    self.save_headers, self.out_file_name)
+                            for i in range(self.browsers_num)]
+            
+            for w in self.workers:
+                w.start()
+            
+            number_of_requests = 0
+            # Start requesting pages
+            for url in self.urls:
+
+                if number_of_requests==self.max_requests:
+                    break
+
+                self.queue.put(url)
+                number_of_requests += 1
+                time.sleep(self.get_thinking_time())
+            
+            for w in self.workers:
+                self.queue.put(None)
+            
+            for w in self.workers:
+                w.join()
+                
+        except KeyboardInterrupt:
+            pass
+            
+        except Exception as e:
+           print("Exception: ", e)
+           
+        finally:
+            self.queue.close()
+            self.server.stop()
+
+    def compute_cdf(self):
+
+        data_size=len(self.thinking_times)
+    
+        # Set bins edges
+        data_set=sorted(set(self.thinking_times))
+        bins=np.append(data_set, data_set[-1]+1)
+    
+        # Use the histogram function to bin the data
+        counts, bin_edges = np.histogram(self.thinking_times, bins=bins, density=False)
+    
+        counts=counts.astype(float)/data_size
+    
+        # Find the cdf
+        self.cdf_samples = np.cumsum(counts)
+    
+        self.cdf = interp1d(bin_edges[0:-1], self.cdf_samples)
+        self.inverse_cdf = interp1d(self.cdf_samples,bin_edges[0:-1])
+        
+    def plot_cdf(self):
+        
+        x = np.linspace(min(self.thinking_times), max(self.thinking_times), num=1000, endpoint=True)
+    
+        # Plot the cdf
+        plt.clf()
+        plt.plot(x, self.cdf(x))
+        plt.ylim((0,1))
+        plt.xlabel("Seconds")
+        plt.ylabel("CDF")
+        plt.title("Thinking time")
+        plt.grid(True)
+    
+        plt.savefig("cdf_thinking_time.png")
+
+    def plot_inverse_cdf(self):
+        
+        x = np.linspace(min(self.cdf_samples), max(self.cdf_samples), num=1000, endpoint=True)
+        
+        # Plot the cdf
+        plt.clf()
+        plt.plot(x, self.inverse_cdf(x))
+        plt.ylabel("Seconds")
+        plt.xlabel("CDF")
+        plt.title("Thinking time")
+        plt.grid(True)
+    
+        plt.savefig("inverse_cdf_thinking_time.png")
+   
+    def get_thinking_time(self):
+        
+        rand=random.uniform(min(self.cdf_samples),max(self.cdf_samples))
+        time = float(self.inverse_cdf(rand))
+        return time
+
+if __name__=="__main__":
+    
+    version="0.1"
     
     parser = argparse.ArgumentParser(description='Web Traffic Generator')
-    parser.add_argument('in_file', metavar='input_file', type=str, nargs=1,
-                       help='File where are stored the pages')                 
-    parser.add_argument('out_file', metavar='output_file', type=str, nargs=1,
-                       help='Output file where HAR structures are saved')                  
-    parser.add_argument('-b', '--backoff', metavar='max_backoff', type=int, nargs=1, default = [0],
-                       help='Use real backoff with maximum value <max_backoff> seconds ')
-    parser.add_argument('-t', '--timeout', metavar='timeout', type=int, nargs=1, default = [30],
-                       help='Timeout in seconds after declaring failed a visit. Default is 30.')
-    parser.add_argument('--headers', metavar='headers',  action='store_const', const=True, default=False,
-                       help='Save headers of HTTP requests and responses in Har structs (e.g., to find referer field)')                  
-    parser.add_argument('-s','--start_page', metavar='start_page', type=int, nargs=1,
-                       help='For internal usage, do not use')
-
+        
+    parser.add_argument('--version',action='version',version='%(prog)s '+ version)
+    
+    parser.add_argument('in_file', metavar='input_file', type=str, 
+                       help='History file.')                 
+    parser.add_argument('out_file', metavar='output_file', type=str,
+                       help='output file name.')
+    parser.add_argument('--max-interval', metavar='<max_interval>', type=int, default = 30,
+                       help='use statistical intervals with maximum value <max_interval> seconds. Default is 30 sec.')
+    parser.add_argument('--timeout', metavar='<timeout>', type=int, default = 30,
+                       help='timeout in seconds after declaring failed a visit. Default is 30 sec.')
+    parser.add_argument('--headers', action='store_const', const=True, default=False,
+                       help='save headers of HTTP requests and responses in Har structs (e.g., to find referer field). Default is False.')
+    parser.add_argument('--browsers', metavar='<number>', type=int, default = 3,
+                       help='number of browsers to open. Default is 3')
+    parser.add_argument('--limit-urls', metavar='<number>', type=int,
+                       help='limit requests to <number> urls')
+    
     args = vars(parser.parse_args())
-
-
-    # Parse agruments
-    pages_file = args['in_file'][0]
-    pages = open(pages_file,"r").read().splitlines() 
-    out_file = args['out_file'][0]
-    timeout = args['timeout'][0]
-    save_headers = args['headers']
-
-    backoff= args['backoff'][0]
-
-    # Use last arguments to detect if i'm master or daemon
-    if args["start_page"] is not None:
-        daemon_start = args["start_page"][0]
-    else:
-        daemon_start = -1
     
-    # If I'm the master
-    if daemon_start == -1:
-    
-        # Create empty outfile
-        with open(out_file, "w") as f:
-            pass
-        
-        # Execute the slave
-        command = " ".join(sys.argv) + " -s 0"
-        print ("Executing:", command ,  file=sys.stderr)
-        ret = subprocess.call(command, shell=True)
-        print("Quitted slave")
-        
-        # Keep execting untill all pages are requested
-        while ret != 0:
-            # Read last page requested, and restart
-            start = int(open("/tmp/har_state", "r").read())
-            print("Detected a Selenium block, restarting...",  file=sys.stderr)
-            command = " ".join(sys.argv) + " -s " + str(start)
-            print ("Executing:", command,  file=sys.stderr)
-            ret = subprocess.call(command, shell=True)
-        
-        # End when all pages are requested
-        print ("All pages requested",  file=sys.stderr)
-        sys.exit(0)
-        
-    else: 
-        
-        # Start Selenium and Proxy
-        server = Server(browser_mob_proxy_location)
-        server.start()
-        proxy = server.create_proxy()
+    WebTrafficGenerator(args).run()
 
-        profile  = webdriver.FirefoxProfile()
-        profile.set_proxy(proxy.selenium_proxy())
-        driver = webdriver.Firefox(firefox_profile=profile)
-        
-        # Start requesting pages from the last one
-        pages = pages[daemon_start:]
-        n = daemon_start
-        
-        # Create a thread pool
-        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-        
-        # Start requesting pages
-        for page in pages:
-            if debug > 0:
-                print("Requesting:", n , page,  file=sys.stderr)
-            
-            # Submit the future
-            future = executor.submit(request_url, page, driver, proxy, out_file)
-            
-            # Wait to complete
-            t = 0
-            while True:
-                time.sleep(1)
-                if debug > 1:
-                    print("Timeout", t,  file=sys.stderr)
-                if future.done():
-                    break
-                t+=1
-                
-                # If timeout elapses, a block happened
-                if t >= timeout:
-                
-                    # Try all the ways to stop everything
-                    open("/tmp/har_state", "w").write(str(n+1))
-                    # Stop Selenium
-                    try:
-                        server.stop()
-                        driver.quit()
-                    except:
-                        pass
-                    # Kill the browser    
-                    try:
-                        command = "killall " + browser
-                        subprocess.call(command, shell=True)
-                        subprocess.call(command + " -KILL", shell=True) 
-                    except:
-                        pass
-                        
-                    if debug > 1:
-                        print ("Quitting with errcode:", n+1,file=sys.stderr)
-                    future.cancel()
-                    print("Quitting slave",  file=sys.stderr)
-                    
-                    # Suicide
-                    os.system('kill %d' % os.getpid())
-
-            n+=1
-
-        # If all pages requested, exit with '0' status
-        server.stop()
-        driver.quit()
-        
-        sys.exit(0)
-
-
-def request_url(page, driver, proxy, out_file):
-    
-    try:
-
-        # Open outfile in append mode 
-        f = open (out_file, "a")
-        if save_headers:
-            proxy.new_har("Har", {"captureHeaders": True} )
-        else:
-            proxy.new_har("Har" )
-        # Request the page
-        url = page
-        print("Requesting:", page)
-        driver.get(url) 
-
-        if backoff != 0:   
-            tm=random_thinking_time(backoff)
-            print("Backoff", tm)
-            time.sleep(tm)
-            
-        tmp_diz={"actual_url" : url }
-        tmp_diz.update(proxy.har)
-
-        f.write(json.dumps(tmp_diz) + "\n")
-            
-    except Exception as e:
-        print("Exception in page loading", e)
-        while True:
-            pass
-        
-
-main()
