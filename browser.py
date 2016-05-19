@@ -46,7 +46,7 @@ class Browser(Process):
                 
                 self.proxy.new_har(ref=url, options={"captureHeaders": self.save_headers})
                 
-                print("Requesting: ", url)
+                print("Browser "+ str(self.id) +": Requesting: ", url)
                 
                 start_time = time.time()
                 
@@ -55,15 +55,17 @@ class Browser(Process):
                     self.driver.get(url)
                     
                 except TimeoutException:
-                    print ("Request timed out")
+                    print ("Browser "+ str(self.id) +": Request timed out")
                 
-                current_har = self.proxy.har
-                current_har["log"]["totalTime"]=(time.time()-start_time)*1000
+                else:
+                    current_har = self.proxy.har
                 
-                hars.append(current_har)
+                    current_har["log"]["totalTime"]=(time.time()-start_time)*1000
+                
+                    hars.append(current_har)
                 
                 url = self.urls_queue.get()
-            
+                
             # Send back HARs
             self.hars_queue.put(hars)
 

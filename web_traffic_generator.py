@@ -44,20 +44,22 @@ class WebTrafficGenerator:
         
         # Read URLs and time
         
-        in_filename,in_ext=os.path.splitext(self.urls_file)
+        self.urls=[]
+        self.thinking_times=[]
+        
+        visit_timestamps=[]
         
         with open(self.urls_file ,"r") as f:
             
-            self.urls=[]
-            self.thinking_times=[]
-            
-            visit_timestamps=[]
-            
-            history=json.load(f)
+            history = f.read().splitlines()
 
-        for entry in history:
-            self.urls.append(entry["url"])
-            visit_timestamps.append(entry["lastVisitTime"])
+        for line in history:
+            
+            entry = line.split()
+            
+            # convert timestamp in seconds
+            visit_timestamps.append(float(entry[0])/1000000)
+            self.urls.append(entry[1])
         
         if not self.max_requests:
             self.max_requests = len(self.urls)
@@ -66,7 +68,7 @@ class WebTrafficGenerator:
         
         for i in range(1, len(visit_timestamps)):
             
-            think_time=(visit_timestamps[i]-visit_timestamps[i-1])/1000
+            think_time=(visit_timestamps[i]-visit_timestamps[i-1])
             
             if think_time<=self.max_interval:
                 
