@@ -1,5 +1,6 @@
 import os
 import json
+import time
 from multiprocessing import Process
 
 from selenium import webdriver
@@ -7,19 +8,16 @@ from selenium.common.exceptions import TimeoutException
 
 class Browser(Process):
     
-    def __init__(self, id, proxy_server, queue, timeout, save_headers,
-                 out_file_name):
+    def __init__(self, id, proxy_server, urls_queue, hars_queue, timeout, save_headers):
         
         super().__init__()
         
         self.id = id
         self.server = proxy_server
-        self.queue = queue
+        self.urls_queue = urls_queue
+        self.hars_queue = hars_queue
         self.timeout = timeout
         self.save_headers = save_headers
-        
-        filename,ext=os.path.splitext(out_file_name)
-        self.out_file = filename+"_"+str(id)+ext
         
     def run(self):
         
@@ -39,8 +37,8 @@ class Browser(Process):
         try:
             
             hars=[]
-             
-            url = self.queue.get()
+            
+            url = self.urls_queue.get()
             
             while url:
                 
@@ -50,6 +48,8 @@ class Browser(Process):
                 
                 print("Requesting: ", url)
                 
+                start_time = time.time()
+                
                 try:
                     
                     self.driver.get(url)
@@ -57,22 +57,29 @@ class Browser(Process):
                 except TimeoutException:
                     print ("Request timed out")
                 
-                hars.append(self.proxy.har)
+                current_har = self.proxy.har
+                current_har["log"]["totalTime"]=(time.time()-start_time)*1000
                 
-                url = self.queue.get()
-        
-            with open(self.out_file,"a") as f:
-                json.dump(hars,f)
+                hars.append(current_har)
+                
+                url = self.urls_queue.get()
+            
+            # Send back HARs
+            self.hars_queue.put(hars)
 
         except KeyboardInterrupt:
             pass
                     
         except Exception as e:
             
-            print("Exception: ", e)
+            print("Browser ",self.id," - Exception: ", e)
+            
+            import traceback
+            traceback.print_exc()
             
         finally:
-            self.queue.close()
+            self.urls_queue.close()
+            self.hars_queue.close()
             self.proxy.close()
             self.driver.quit()
         

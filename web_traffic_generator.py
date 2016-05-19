@@ -28,7 +28,7 @@ class WebTrafficGenerator:
         # Parse arguments
         self.urls_file = args['in_file']
         
-        self.out_file_name = os.path.join("HAR_files",args['out_file'])
+        self.out_file_name = args['out_file']
         
         self.timeout = args['timeout']
         
@@ -76,18 +76,6 @@ class WebTrafficGenerator:
         
         print ("Number of URLs: ",len(self.urls))
         
-        # Create or clean HARs folder
-        
-        if not os.path.exists("HAR_files"):
-            os.makedirs("HAR_files")
-        else:
-            for file in os.listdir("HAR_files"):
-                
-                file_path = os.path.join("HAR_files", file)
-                
-                if os.path.isfile(file_path):
-                    os.remove(file_path)
-
         # Create or clean statistics folder
         
         if not os.path.exists("Statistics"):
@@ -109,14 +97,15 @@ class WebTrafficGenerator:
         
         self.server.start()
         
-        # start queue 
-        self.queue = Queue()
+        # start queues
+        self.urls_queue = Queue()
+        self.hars_queue = Queue()
         
         try:
             
             self.workers = [Browser(i, self.server,
-                                    self.queue, self.timeout, 
-                                    self.save_headers, self.out_file_name)
+                                    self.urls_queue, self.hars_queue,
+                                    self.timeout, self.save_headers)
                             for i in range(self.browsers_num)]
             
             for w in self.workers:
@@ -129,12 +118,67 @@ class WebTrafficGenerator:
                 if number_of_requests==self.max_requests:
                     break
 
-                self.queue.put(url)
+                self.urls_queue.put(url)
                 number_of_requests += 1
                 time.sleep(self.get_thinking_time())
             
             for w in self.workers:
-                self.queue.put(None)
+                self.urls_queue.put(None)
+            
+            self.hars = []
+            
+            for w in self.workers:
+                browser_hars = self.hars_queue.get()
+                self.hars.extend(browser_hars)
+            
+            # write HAR file
+            with open(self.out_file_name,"w") as f:
+                json.dump(self.hars,f)
+            
+            # Gather statistics
+            self.stats = {
+                          "totalTime":[],
+                          "blocked":[],
+                          "dns":[],
+                          "connect":[],
+                          "send":[],
+                          "wait":[],
+                          "receive":[]
+                          }        
+            
+            for har in self.hars:
+                
+                if har["log"]["totalTime"]!=-1:
+                    self.stats["totalTime"].append(har["log"]["totalTime"])
+                
+                for entry in har["log"]["entries"]:
+                    
+                    # Queuing
+                    if entry["timings"]["blocked"]!=-1:
+                        self.stats["blocked"].append(entry["timings"]["blocked"])
+                        
+                    # DNS resolution
+                    if entry["timings"]["dns"]!=-1:
+                        self.stats["dns"].append(entry["timings"]["dns"])
+                        
+                    # TCP Connection
+                    if entry["timings"]["connect"]!=-1:
+                        self.stats["connect"].append(entry["timings"]["connect"])
+                        
+                    # HTTP Request send
+                    if entry["timings"]["send"]!=-1:
+                        self.stats["send"].append(entry["timings"]["send"])
+                        
+                    # Wait the server
+                    if entry["timings"]["wait"]!=-1:
+                        self.stats["wait"].append(entry["timings"]["wait"])
+                        
+                    # HTTP Response receive
+                    if entry["timings"]["receive"]!=-1:
+                        self.stats["receive"].append(entry["timings"]["receive"])
+                    
+            # Save statistics
+            self.plot_stats()
             
             for w in self.workers:
                 w.join()
@@ -145,45 +189,102 @@ class WebTrafficGenerator:
         except Exception as e:
            print("Exception: ", e)
            
+           import traceback
+           traceback.print_exc()
+           
         finally:
-            self.queue.close()
+            self.urls_queue.close()
+            self.hars_queue.close()
             self.server.stop()
 
     def plot_thinking_time_cdf(self):
         
-        x = np.linspace(min(self.thinking_times), max(self.thinking_times), num=1000, endpoint=True)
+        x = np.linspace(min(self.thinking_times), max(self.thinking_times), num=10000, endpoint=True)
     
         # Plot the cdf
-        plt.clf()
-        plt.plot(x, self.cdf(x))
-        plt.ylim((0,1))
-        plt.xlabel("Seconds")
-        plt.ylabel("CDF")
-        plt.title("Thinking time")
-        plt.grid(True)
+        fig = plt.figure()
+        axes = fig.add_subplot(111)
+        axes.plot(x, self.cdf(x))
+        axes.set_ylim((0,1))
+        axes.set_xlabel("Seconds")
+        axes.set_ylabel("CDF")
+        axes.set_title("Thinking time")
+        axes.grid(True)
     
-        plt.savefig("Statistics/thinking_time_cdf.png")
+        fig.savefig(os.path.join("Statistics","thinking_time_cdf.png"))
 
     def plot_thinking_time_inverse_cdf(self):
         
-        x = np.linspace(min(self.cdf_samples), max(self.cdf_samples), num=1000, endpoint=True)
+        x = np.linspace(min(self.cdf_samples), max(self.cdf_samples), num=10000, endpoint=True)
         
         # Plot the cdf
-        plt.clf()
-        plt.plot(x, self.inverse_cdf(x))
-        plt.ylabel("Seconds")
-        plt.xlabel("CDF")
-        plt.title("Thinking time")
-        plt.grid(True)
+        fig = plt.figure()
+        axes = fig.add_subplot(111)
+        axes.plot(x, self.inverse_cdf(x))
+        axes.set_xlim((0,1))
+        axes.set_ylabel("Seconds")
+        axes.set_xlabel("CDF")
+        axes.set_title("Thinking time")
+        axes.grid(True)
     
-        plt.savefig("Statistics/thinking_time_inverse_cdf.png")
+        fig.savefig(os.path.join("Statistics","thinking_time_inverse_cdf.png"))
    
     def get_thinking_time(self):
         
         rand=random.uniform(min(self.cdf_samples),max(self.cdf_samples))
         time = float(self.inverse_cdf(rand))
         return time
-
+    
+    def plot_stats(self):
+        
+        fig_total = plt.figure()
+        axes_total = fig_total.add_subplot(111)
+        
+        fig_timings = plt.figure()
+        axes_timings = fig_timings.add_subplot(1,1,1)
+        
+        fig_timings_log = plt.figure()
+        axes_timings_log = fig_timings_log.add_subplot(1,1,1)
+        
+        for key in self.stats:
+            if len(set(self.stats[key]))>1:
+                cdf = compute_cdf(self.stats[key])
+                
+                x = np.linspace(min(self.stats[key]), max(self.stats[key]), num=10000, endpoint=True)
+            
+                # Plot the cdf
+                if key=="totalTime":
+                    axes_total.plot(x/1000, cdf[0](x), label=key)
+                else:
+                    axes_timings.plot(x, cdf[0](x), label=key)
+                    axes_timings_log.plot(x, cdf[0](x), label=key)
+                
+        axes_total.set_ylim((0,1))
+        axes_total.set_xlabel("Seconds")
+        axes_total.set_ylabel("CDF")
+        axes_total.set_title("Page load time")
+        axes_total.grid(True)
+        
+        fig_total.savefig(os.path.join("Statistics","page_load_cdf.png"))
+        
+        axes_timings.set_ylim((0,1))
+        axes_timings.set_xlabel("Milliseconds")
+        axes_timings.set_ylabel("CDF")
+        axes_timings.set_title("Single resource timings")
+        axes_timings.grid(True)
+        axes_timings.legend(loc='best')
+        
+        axes_timings_log.set_ylim((0,1))
+        axes_timings_log.set_xlabel("Milliseconds")
+        axes_timings_log.set_ylabel("CDF")
+        axes_timings_log.set_xscale("log")
+        axes_timings_log.set_title("Single resource timings")
+        axes_timings_log.grid(True)
+        axes_timings_log.legend(loc='best')
+    
+        fig_timings.savefig(os.path.join("Statistics","timings_cdf.png"))
+        fig_timings_log.savefig(os.path.join("Statistics","timings_cdf_log.png"))
+        
 if __name__=="__main__":
     
     version="0.1"
@@ -195,7 +296,7 @@ if __name__=="__main__":
     parser.add_argument('in_file', metavar='input_file', type=str, 
                        help='History file.')                 
     parser.add_argument('out_file', metavar='output_file', type=str,
-                       help='output file name.')
+                       help='output HAR file name.')
     parser.add_argument('--max-interval', metavar='<max_interval>', type=int, default = 30,
                        help='use statistical intervals with maximum value <max_interval> seconds. Default is 30 sec.')
     parser.add_argument('--timeout', metavar='<timeout>', type=int, default = 30,
