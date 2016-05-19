@@ -6,6 +6,7 @@ import os
 import numpy as np
 import random
 import time
+import tempfile
 import matplotlib.pyplot as plt
 from multiprocessing import Queue, cpu_count
 
@@ -39,155 +40,167 @@ class WebTrafficGenerator:
         self.browsers_num = args['browsers']
 
         self.max_requests = args['limit_urls']
-    
+        
+        
     def run(self):
         
-        # Read URLs and time
-        
-        self.urls=[]
-        self.thinking_times=[]
-        
-        visit_timestamps=[]
-        
-        with open(self.urls_file ,"r") as f:
-            
-            history = f.read().splitlines()
-
-        for line in history:
-            
-            entry = line.split()
-            
-            # convert timestamp in seconds
-            visit_timestamps.append(float(entry[0])/1000000)
-            self.urls.append(entry[1])
-        
-        if not self.max_requests:
-            self.max_requests = len(self.urls)
-
-        visit_timestamps.sort()
-        
-        for i in range(1, len(visit_timestamps)):
-            
-            think_time=(visit_timestamps[i]-visit_timestamps[i-1])
-            
-            if think_time<=self.max_interval:
-                
-                self.thinking_times.append(think_time)
-        
-        self.cdf, self.inverse_cdf, self.cdf_samples = compute_cdf(self.thinking_times)
-        
-        print ("Number of URLs: ",len(self.urls))
-        
-        # Create or clean statistics folder
-        
-        if not os.path.exists("Statistics"):
-            os.makedirs("Statistics")
-        else:
-            for file in os.listdir("Statistics"):
-                
-                file_path = os.path.join("Statistics", file)
-                
-                if os.path.isfile(file_path):
-                    os.remove(file_path)
-
-        # Plot history statistics
-        self.plot_thinking_time_cdf()
-        self.plot_thinking_time_inverse_cdf()
-        
-        # Start Proxy
-        self.server = Server(self.browser_mob_proxy_location)
-        
-        self.server.start()
-        
-        # start queues
-        self.urls_queue = Queue()
-        self.hars_queue = Queue()
+        # create temporary directory for downloads
+        self.temp_dir = tempfile.TemporaryDirectory()
         
         try:
             
-            self.workers = [Browser(i, self.server,
-                                    self.urls_queue, self.hars_queue,
-                                    self.timeout, self.save_headers)
-                            for i in range(self.browsers_num)]
+            # Read URLs and time
             
-            for w in self.workers:
-                w.start()
+            self.urls=[]
+            self.thinking_times=[]
             
-            number_of_requests = 0
-            # Start requesting pages
-            for url in self.urls:
-
-                if number_of_requests==self.max_requests:
-                    break
-
-                self.urls_queue.put(url)
-                number_of_requests += 1
-                time.sleep(self.get_thinking_time())
+            visit_timestamps=[]
             
-            for w in self.workers:
-                self.urls_queue.put(None)
-            
-            self.hars = []
-            
-            for w in self.workers:
-                browser_hars = self.hars_queue.get()
-                self.hars.extend(browser_hars)
-            
-            # write HAR file
-            with open(self.out_file_name,"w") as f:
-                json.dump(self.hars,f)
-            
-            # Gather statistics
-            self.stats = {
-                          "totalTime":[],
-                          "blocked":[],
-                          "dns":[],
-                          "connect":[],
-                          "send":[],
-                          "wait":[],
-                          "receive":[]
-                          }        
-            
-            for har in self.hars:
+            with open(self.urls_file ,"r") as f:
                 
-                if har["log"]["totalTime"]!=-1:
-                    self.stats["totalTime"].append(har["log"]["totalTime"])
+                history = f.read().splitlines()
+    
+            for line in history:
                 
-                for entry in har["log"]["entries"]:
+                entry = line.split()
+                
+                # convert timestamp in seconds
+                visit_timestamps.append(float(entry[0])/1000000)
+                self.urls.append(entry[1])
+            
+            if not self.max_requests:
+                self.max_requests = len(self.urls)
+    
+            visit_timestamps.sort()
+            
+            for i in range(1, len(visit_timestamps)):
+                
+                think_time=(visit_timestamps[i]-visit_timestamps[i-1])
+                
+                if think_time<=self.max_interval:
                     
-                    # Queuing
-                    if entry["timings"]["blocked"]!=-1:
-                        self.stats["blocked"].append(entry["timings"]["blocked"])
-                        
-                    # DNS resolution
-                    if entry["timings"]["dns"]!=-1:
-                        self.stats["dns"].append(entry["timings"]["dns"])
-                        
-                    # TCP Connection
-                    if entry["timings"]["connect"]!=-1:
-                        self.stats["connect"].append(entry["timings"]["connect"])
-                        
-                    # HTTP Request send
-                    if entry["timings"]["send"]!=-1:
-                        self.stats["send"].append(entry["timings"]["send"])
-                        
-                    # Wait the server
-                    if entry["timings"]["wait"]!=-1:
-                        self.stats["wait"].append(entry["timings"]["wait"])
-                        
-                    # HTTP Response receive
-                    if entry["timings"]["receive"]!=-1:
-                        self.stats["receive"].append(entry["timings"]["receive"])
+                    self.thinking_times.append(think_time)
+            
+            self.cdf, self.inverse_cdf, self.cdf_samples = compute_cdf(self.thinking_times)
+            
+            print ("Number of URLs: ",len(self.urls))
+            
+            # Create or clean statistics folder
+            
+            if not os.path.exists("Statistics"):
+                os.makedirs("Statistics")
+            else:
+                for file in os.listdir("Statistics"):
                     
-            # Save statistics
-            self.plot_stats()
+                    file_path = os.path.join("Statistics", file)
+                    
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+    
+            # Plot history statistics
+            self.plot_thinking_time_cdf()
+            self.plot_thinking_time_inverse_cdf()
             
-            for w in self.workers:
-                w.join()
+            # Start Proxy
+            self.server = Server(self.browser_mob_proxy_location)
+            
+            self.server.start()
+            
+            # start queues
+            self.urls_queue = Queue()
+            self.hars_queue = Queue()
+            
+            try:
                 
-        except KeyboardInterrupt:
-            pass
+                self.workers = [Browser(i, self.server,
+                                        self.urls_queue, self.hars_queue,
+                                        self.timeout, self.save_headers,
+                                        self.temp_dir.name)
+                                for i in range(self.browsers_num)]
+                
+                for w in self.workers:
+                    w.start()
+                
+                number_of_requests = 0
+                # Start requesting pages
+                for url in self.urls:
+    
+                    if number_of_requests==self.max_requests:
+                        break
+    
+                    self.urls_queue.put(url)
+                    number_of_requests += 1
+                    time.sleep(self.get_thinking_time())
+                
+                for w in self.workers:
+                    self.urls_queue.put(None)
+                
+                self.hars = []
+                
+                for w in self.workers:
+                    browser_hars = self.hars_queue.get()
+                    self.hars.extend(browser_hars)
+                
+                # write HAR file
+                with open(self.out_file_name,"w") as f:
+                    json.dump(self.hars,f)
+                
+                # Gather statistics
+                self.stats = {
+                              "totalTime":[],
+                              "blocked":[],
+                              "dns":[],
+                              "connect":[],
+                              "send":[],
+                              "wait":[],
+                              "receive":[]
+                              }        
+                
+                for har in self.hars:
+                    
+                    if har["log"]["totalTime"]!=-1:
+                        self.stats["totalTime"].append(har["log"]["totalTime"])
+                    
+                    for entry in har["log"]["entries"]:
+                        
+                        # Queuing
+                        if entry["timings"]["blocked"]!=-1:
+                            self.stats["blocked"].append(entry["timings"]["blocked"])
+                            
+                        # DNS resolution
+                        if entry["timings"]["dns"]!=-1:
+                            self.stats["dns"].append(entry["timings"]["dns"])
+                            
+                        # TCP Connection
+                        if entry["timings"]["connect"]!=-1:
+                            self.stats["connect"].append(entry["timings"]["connect"])
+                            
+                        # HTTP Request send
+                        if entry["timings"]["send"]!=-1:
+                            self.stats["send"].append(entry["timings"]["send"])
+                            
+                        # Wait the server
+                        if entry["timings"]["wait"]!=-1:
+                            self.stats["wait"].append(entry["timings"]["wait"])
+                            
+                        # HTTP Response receive
+                        if entry["timings"]["receive"]!=-1:
+                            self.stats["receive"].append(entry["timings"]["receive"])
+                        
+                # Save statistics
+                self.plot_stats()
+                
+                for w in self.workers:
+                    w.join()
+                    
+            except KeyboardInterrupt:
+                pass
             
+            finally:
+                self.urls_queue.close()
+                self.hars_queue.close()
+                self.server.stop()
+                
         except Exception as e:
            print("Exception: ", e)
            
@@ -195,9 +208,8 @@ class WebTrafficGenerator:
            traceback.print_exc()
            
         finally:
-            self.urls_queue.close()
-            self.hars_queue.close()
-            self.server.stop()
+            
+            self.temp_dir.cleanup()
 
     def plot_thinking_time_cdf(self):
         
