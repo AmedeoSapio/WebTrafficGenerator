@@ -38,12 +38,19 @@ class Browser(Process):
         # A comma-separated list of MIME types to save to disk without asking
         # what to use to open the file
         self.profile.set_preference("browser.helperApps.neverAsk.saveToDisk",
-                                    "text/csv,application/x-msexcel,"+
-                                    "application/excel,application/x-excel,"+
-                                    "application/vnd.ms-excel,image/png,"+
-                                    "image/jpeg,text/html,text/plain,"+
-                                    "application/msword,application/xml"+
-                                    "application/octet-stream")
+                                    "application/x-msexcel,"+
+                                    "application/excel,"+
+                                    "application/x-excel,"+
+                                    "application/vnd.ms-excel,"+
+                                    "application/pdf,"+
+                                    "application/msword,"+
+                                    "application/xml,"+
+                                    "application/octet-stream,"+
+                                    "image/png,"+
+                                    "image/jpeg,"+
+                                    "text/html,"+
+                                    "text/plain,"+
+                                    "text/csv")
                                     
         # Do not show the Download Manager                  
         self.profile.set_preference("browser.download.manager.showWhenStarting", False)
