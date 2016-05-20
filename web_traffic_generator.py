@@ -41,6 +41,7 @@ class WebTrafficGenerator:
 
         self.max_requests = args['limit_urls']
         
+        self.no_sleep = args['no_sleep']
         
     def run(self):
         
@@ -64,9 +65,18 @@ class WebTrafficGenerator:
                 
                 entry = line.split()
                 
-                # convert timestamp in seconds
-                visit_timestamps.append(float(entry[0])/1000000)
-                self.urls.append(entry[1])
+                if not (entry[1].lower().startswith("file://") or
+                    (entry[1].lower().startswith("http://") and 
+                     (entry[1].lower().startswith("10.",7) or 
+                      entry[1].lower().startswith("192.168.",7))) or 
+                    (entry[1].lower().startswith("https://") and 
+                     (entry[1].lower().startswith("10.",8) or 
+                      entry[1].lower().startswith("192.168.",8)))):
+                    
+                    # convert timestamp in seconds
+                    visit_timestamps.append(float(entry[0])/1000000)
+                    
+                    self.urls.append(entry[1])
             
             if not self.max_requests:
                 self.max_requests = len(self.urls)
@@ -130,7 +140,9 @@ class WebTrafficGenerator:
     
                     self.urls_queue.put(url)
                     number_of_requests += 1
-                    time.sleep(self.get_thinking_time())
+                    
+                    if not self.no_sleep:
+                        time.sleep(self.get_thinking_time())
                 
                 for w in self.workers:
                     self.urls_queue.put(None)
@@ -154,7 +166,7 @@ class WebTrafficGenerator:
                               "send":[],
                               "wait":[],
                               "receive":[]
-                              }        
+                              }
                 
                 for har in self.hars:
                     
@@ -317,6 +329,8 @@ if __name__=="__main__":
                        help='timeout in seconds after declaring failed a visit. Default is 30 sec.')
     parser.add_argument('--headers', action='store_const', const=True, default=False,
                        help='save headers of HTTP requests and responses in Har structs (e.g., to find referer field). Default is False.')
+    parser.add_argument('--no-sleep', action='store_const', const=True, default=False,
+                       help='Do not sleep between requests. Default is False.')
     parser.add_argument('--browsers', metavar='<number>', type=int, default = 3,
                        help='number of browsers to open. Default is 3')
     parser.add_argument('--limit-urls', metavar='<number>', type=int,

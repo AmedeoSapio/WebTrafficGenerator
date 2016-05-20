@@ -63,10 +63,10 @@ class Browser(Process):
         self.profile.set_preference("browser.helperApps.alwaysAsk.force", False)
         
         self.profile.set_proxy(self.proxy.selenium_proxy())
-
+        
         self.driver = webdriver.Firefox(firefox_profile=self.profile)
+        
         self.driver.set_page_load_timeout(self.timeout)
-
         
     def run(self):
         
@@ -88,7 +88,7 @@ class Browser(Process):
                 
                 self.proxy.new_har(ref=url, options={"captureHeaders": self.save_headers})
                 
-                print("Browser "+ str(self.id) +": Requesting: ", url)
+                print("Browser "+ str(self.id) +": ", url)
                 
                 start_time = time.time()
                 
@@ -101,14 +101,18 @@ class Browser(Process):
                     print ("Browser "+ str(self.id) +": Request timed out")
                     
                     # Restart browser and proxy
+                    
                     self.driver.quit()
-                    self.proxy.close()
+                    
                     self.start_browser()
                     
                 else:
+                    
+                    total_time = (time.time()-start_time)*1000
+                    
                     current_har = self.proxy.har
                 
-                    current_har["log"]["totalTime"]=(time.time()-start_time)*1000
+                    current_har["log"]["totalTime"] = total_time
                 
                     hars.append(current_har)
                 
