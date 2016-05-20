@@ -315,7 +315,9 @@ class WebTrafficGenerator:
         axes_timings_log.set_ylabel("CDF")
         axes_timings_log.set_xscale("log")
         axes_timings_log.set_title("Single resource timings")
-        axes_timings_log.grid(True)
+        axes_timings_log.grid(True, which="both", axis="x")
+        axes_timings_log.grid(True, which="major", axis="y")
+        
         axes_timings_log.legend(loc='best')
     
         fig_timings.savefig(os.path.join("Statistics","timings_cdf.png"))

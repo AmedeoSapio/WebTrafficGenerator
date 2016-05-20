@@ -1,6 +1,9 @@
 import os
 import json
 import time
+import errno
+
+from socket import error as socket_error
 from multiprocessing import Process
 
 from selenium import webdriver
@@ -93,15 +96,23 @@ class Browser(Process):
                 
                 counter+=1
                 
-                self.proxy.new_har(ref=url, options={"captureHeaders": self.save_headers})
-                
-                print("Browser "+ str(self.id) +": ", url)
-                
-                start_time = time.time()
-                
                 try:
                     
+                    self.proxy.new_har(ref=url, options={"captureHeaders": self.save_headers})
+                    
+                    print("Browser "+ str(self.id) +": ", url)
+                    
+                    start_time = time.time()
+                    
                     self.driver.get(url)
+                    
+                    total_time = (time.time()-start_time)*1000
+                    
+                    current_har = self.proxy.har
+                
+                    current_har["log"]["totalTime"] = total_time
+                
+                    hars.append(current_har)
                     
                 except TimeoutException:
                     
@@ -111,18 +122,31 @@ class Browser(Process):
                     
                     self.driver.quit()
                     
+                    try:
+                        self.proxy.close()
+                    except:
+                        pass
+                    
                     self.start_browser()
                     
-                else:
+                except socket_error as serr:
                     
-                    total_time = (time.time()-start_time)*1000
+                    if serr.errno == errno.ECONNREFUSED:
+                        print ("Browser "+ str(self.id) +": Proxy offline")
+                    else:
+                        print ("Browser "+ str(self.id) +": Proxy error")
                     
-                    current_har = self.proxy.har
-                
-                    current_har["log"]["totalTime"] = total_time
-                
-                    hars.append(current_har)
-                
+                    # Restart browser and proxy
+                    
+                    self.driver.quit()
+                    
+                    try:
+                        self.proxy.close()
+                    except:
+                        pass
+                    
+                    self.start_browser()
+                    
                 url = self.urls_queue.get()
                 
             # Send back HARs
@@ -143,6 +167,10 @@ class Browser(Process):
             self.hars_queue.close()
             
             self.driver.quit()
-            self.proxy.close()
+            
+            try:
+                self.proxy.close()
+            except:
+                pass
         
         print ("Browser: ", self.id, " processed ", counter, " pages")
