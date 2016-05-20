@@ -283,6 +283,16 @@ class WebTrafficGenerator:
                     axes_total.plot(x/1000, cdf[0](x), label=key)
                 else:
                     axes_timings.plot(x, cdf[0](x), label=key)
+                    
+                    # zero is not valid with log axes
+                    if min(self.stats[key])==0:
+                        non_zero_min = find_non_zero_min(self.stats[key])
+                        
+                        if non_zero_min == 0:
+                            continue
+                        
+                        x = np.linspace(non_zero_min, max(self.stats[key]), num=10000, endpoint=True)
+                        
                     axes_timings_log.plot(x, cdf[0](x), label=key)
                 
         axes_total.set_ylim((0,1))

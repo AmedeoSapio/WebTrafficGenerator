@@ -23,3 +23,17 @@ def compute_cdf(data):
 
     return cdf, inverse_cdf, cdf_samples
 
+'''
+Find the minimum values that is not zero.
+Returns 0 if values are all zero
+'''
+def find_non_zero_min(values):
+    
+    min = values[0]
+    
+    for x in values[1:]:
+        
+        if (x!=0 and (min==0 or x < min)):
+            min = x
+        
+    return min
