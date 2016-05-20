@@ -29,6 +29,13 @@ class Browser(Process):
         
         self.proxy = self.server.create_proxy()
         
+        self.proxy.timeouts = {
+                               'request': 5,
+                               'read': 5,
+                               'connection': 5,
+                               'dns': 5
+        } 
+        
         self.profile = webdriver.FirefoxProfile()
         
         # Download files
