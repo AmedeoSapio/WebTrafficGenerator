@@ -11,8 +11,8 @@ from selenium.common.exceptions import TimeoutException
 
 class Browser(Process):
     
-    def __init__(self, id, proxy_server, urls_queue, hars_queue, timeout,
-                 save_headers, temp_dir):
+    def __init__(self, id, proxy_server, urls_queue, hars_queue, barrier,
+                 timeout, save_headers, temp_dir):
         
         super().__init__()
         
@@ -20,6 +20,7 @@ class Browser(Process):
         self.server = proxy_server
         self.urls_queue = urls_queue
         self.hars_queue = hars_queue
+        self.barrier = barrier
         self.timeout = timeout
         self.save_headers = save_headers
         
@@ -30,7 +31,15 @@ class Browser(Process):
     '''
     def start_browser(self):
         
-        self.proxy = self.server.create_proxy()
+        try:
+            self.proxy = self.server.create_proxy()
+        except Exception as e:
+            print("Browser "+ str(self.id) +": Proxy server is offline: ", e)
+            
+            self.barrier.wait()
+            
+            self.proxy = self.server.create_proxy()
+            
         
         self.proxy.timeouts = {
                                'request': 5,
@@ -82,7 +91,7 @@ class Browser(Process):
         
         try:
             
-            print ("Starting browser:  ", self.id)
+            print ("Starting browser: "+ str(self.id))
             
             self.start_browser()
             
@@ -114,39 +123,35 @@ class Browser(Process):
                 
                     hars.append(current_har)
                     
-                except TimeoutException:
+                except Exception as e:
                     
-                    print ("Browser "+ str(self.id) +": Request timed out")
+                    if isinstance(e, TimeoutException):
+                        
+                        print ("Browser "+ str(self.id) +": Request timed out")
                     
+                    elif isinstance(e, socket_error):
+                        if e.errno == errno.ECONNREFUSED:
+                            print ("Browser "+ str(self.id) +": Proxy offline")
+                        else:
+                            print ("Browser "+ str(self.id) +": Proxy error")
+                    else: 
+                        
+                        print("Browser "+ str(self.id) +": Exception: ", e)
+                        
                     # Restart browser and proxy
                     
-                    self.driver.quit()
+                    try:
+                        self.driver.quit()
+                    except:
+                        print("Browser "+ str(self.id) +": - Unable to close the browser: ", e)
                     
                     try:
                         self.proxy.close()
                     except:
-                        pass
+                        print("Browser "+ str(self.id) +": - Unable to close the proxy: ", e)
                     
                     self.start_browser()
-                    
-                except socket_error as serr:
-                    
-                    if serr.errno == errno.ECONNREFUSED:
-                        print ("Browser "+ str(self.id) +": Proxy offline")
-                    else:
-                        print ("Browser "+ str(self.id) +": Proxy error")
-                    
-                    # Restart browser and proxy
-                    
-                    self.driver.quit()
-                    
-                    try:
-                        self.proxy.close()
-                    except:
-                        pass
-                    
-                    self.start_browser()
-                    
+                
                 url = self.urls_queue.get()
                 
             # Send back HARs
@@ -157,7 +162,7 @@ class Browser(Process):
                     
         except Exception as e:
             
-            print("Browser ",self.id," - Exception: ", e)
+            print("Browser "+ str(self.id) +": Exception: ", e)
             
             import traceback
             traceback.print_exc()
@@ -173,4 +178,4 @@ class Browser(Process):
             except:
                 pass
         
-        print ("Browser: ", self.id, " processed ", counter, " pages")
+        print ("Browser "+ str(self.id) +": processed ", counter, " pages")

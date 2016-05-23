@@ -8,7 +8,7 @@ import random
 import time
 import tempfile
 import matplotlib.pyplot as plt
-from multiprocessing import Queue, cpu_count
+from multiprocessing import Queue, cpu_count, Barrier
 
 from browsermobproxy import Server
 from selenium import webdriver
@@ -93,7 +93,7 @@ class WebTrafficGenerator:
             
             self.cdf, self.inverse_cdf, self.cdf_samples = compute_cdf(self.thinking_times)
             
-            print ("Number of URLs: ",len(self.urls))
+            print ("Number of URLs: "+len(self.urls))
             
             # Create or clean statistics folder
             
@@ -120,10 +120,14 @@ class WebTrafficGenerator:
             self.urls_queue = Queue()
             self.hars_queue = Queue()
             
+            # start Barrier (for coordinating proxy server restart) 
+            self.barrier = Barrier(self.browsers_num, action = self.restart_proxy_server)
+            
             try:
                 
                 self.workers = [Browser(i, self.server,
                                         self.urls_queue, self.hars_queue,
+                                        self.barrier,
                                         self.timeout, self.save_headers,
                                         self.temp_dir.name)
                                 for i in range(self.browsers_num)]
@@ -214,7 +218,7 @@ class WebTrafficGenerator:
                 self.server.stop()
                 
         except Exception as e:
-           print("Exception: ", e)
+           print("Exception: " + str(e))
            
            import traceback
            traceback.print_exc()
@@ -223,6 +227,20 @@ class WebTrafficGenerator:
             
             self.temp_dir.cleanup()
 
+    def restart_proxy_server(self):
+        
+        try:
+            self.server.stop()
+        except Exception as e:
+            print("Failed to stop proxy server. Exception: " + str(e))
+            
+        # Start Proxy
+        self.server = Server(self.browser_mob_proxy_location)
+        
+        self.server.start() 
+        
+        print("Proxy server restarted")    
+    
     def plot_thinking_time_cdf(self):
         
         x = np.linspace(min(self.thinking_times), max(self.thinking_times), num=10000, endpoint=True)
