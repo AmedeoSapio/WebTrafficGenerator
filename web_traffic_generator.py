@@ -43,6 +43,8 @@ class WebTrafficGenerator:
         
         self.no_sleep = args['no_sleep']
         
+        self.no_https = args['no_https']
+        
     def run(self):
         
         # create temporary directory for downloads
@@ -76,7 +78,8 @@ class WebTrafficGenerator:
                     # convert timestamp in seconds
                     visit_timestamps.append(float(entry[0])/1000000)
                     
-                    self.urls.append(entry[1])
+                    if (not self.no_https or not entry[1].lower().startswith("https://")):
+                        self.urls.append(entry[1])
             
             if not self.max_requests:
                 self.max_requests = len(self.urls)
@@ -93,7 +96,7 @@ class WebTrafficGenerator:
             
             self.cdf, self.inverse_cdf, self.cdf_samples = compute_cdf(self.thinking_times)
             
-            print ("Number of URLs: "+len(self.urls))
+            print ("Number of URLs: "+str(len(self.urls)))
             
             # Create or clean statistics folder
             
@@ -365,6 +368,8 @@ if __name__=="__main__":
                        help='number of browsers to open. Default is 3')
     parser.add_argument('--limit-urls', metavar='<number>', type=int,
                        help='limit requests to <number> urls')
+    parser.add_argument('--no-https', action='store_const', const=True, default=False,
+                       help='Do not replay pages on https. Default is False.')
     
     args = vars(parser.parse_args())
     
