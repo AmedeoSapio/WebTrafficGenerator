@@ -31,6 +31,8 @@ class WebTrafficGenerator:
         
         self.out_file_name = args['out_file']
         
+        self.out_stats_folder = self.out_file_name+"_stats"
+        
         self.timeout = args['timeout']
         
         self.save_headers = args['headers']
@@ -100,12 +102,12 @@ class WebTrafficGenerator:
             
             # Create or clean statistics folder
             
-            if not os.path.exists("Statistics"):
-                os.makedirs("Statistics")
+            if not os.path.exists(self.out_stats_folder):
+                os.makedirs(self.out_stats_folder)
             else:
-                for file in os.listdir("Statistics"):
+                for file in os.listdir(self.out_stats_folder):
                     
-                    file_path = os.path.join("Statistics", file)
+                    file_path = os.path.join(self.out_stats_folder, file)
                     
                     if os.path.isfile(file_path):
                         os.remove(file_path)
@@ -182,29 +184,31 @@ class WebTrafficGenerator:
                     
                     for entry in har["log"]["entries"]:
                         
-                        # Queuing
-                        if entry["timings"]["blocked"]!=-1:
-                            self.stats["blocked"].append(entry["timings"]["blocked"])
-                            
-                        # DNS resolution
-                        if entry["timings"]["dns"]!=-1:
-                            self.stats["dns"].append(entry["timings"]["dns"])
-                            
-                        # TCP Connection
-                        if entry["timings"]["connect"]!=-1:
-                            self.stats["connect"].append(entry["timings"]["connect"])
-                            
-                        # HTTP Request send
-                        if entry["timings"]["send"]!=-1:
-                            self.stats["send"].append(entry["timings"]["send"])
-                            
-                        # Wait the server
-                        if entry["timings"]["wait"]!=-1:
-                            self.stats["wait"].append(entry["timings"]["wait"])
-                            
-                        # HTTP Response receive
-                        if entry["timings"]["receive"]!=-1:
-                            self.stats["receive"].append(entry["timings"]["receive"])
+                        if (not self.no_https or not entry["request"]["url"].lower().startswith("https://")):
+                        
+                            # Queuing
+                            if entry["timings"]["blocked"]!=-1:
+                                self.stats["blocked"].append(entry["timings"]["blocked"])
+                                
+                            # DNS resolution
+                            if entry["timings"]["dns"]!=-1:
+                                self.stats["dns"].append(entry["timings"]["dns"])
+                                
+                            # TCP Connection
+                            if entry["timings"]["connect"]!=-1:
+                                self.stats["connect"].append(entry["timings"]["connect"])
+                                
+                            # HTTP Request send
+                            if entry["timings"]["send"]!=-1:
+                                self.stats["send"].append(entry["timings"]["send"])
+                                
+                            # Wait the server
+                            if entry["timings"]["wait"]!=-1:
+                                self.stats["wait"].append(entry["timings"]["wait"])
+                                
+                            # HTTP Response receive
+                            if entry["timings"]["receive"]!=-1:
+                                self.stats["receive"].append(entry["timings"]["receive"])
                         
                 # Save statistics
                 self.plot_stats()
@@ -258,7 +262,7 @@ class WebTrafficGenerator:
         axes.set_title("Thinking time")
         axes.grid(True)
     
-        fig.savefig(os.path.join("Statistics","thinking_time_cdf.png"))
+        fig.savefig(os.path.join(self.out_stats_folder,"thinking_time_cdf.png"))
 
     def plot_thinking_time_inverse_cdf(self):
         
@@ -274,7 +278,7 @@ class WebTrafficGenerator:
         axes.set_title("Thinking time")
         axes.grid(True)
     
-        fig.savefig(os.path.join("Statistics","thinking_time_inverse_cdf.png"))
+        fig.savefig(os.path.join(self.out_stats_folder,"thinking_time_inverse_cdf.png"))
    
     def get_thinking_time(self):
         
@@ -322,7 +326,7 @@ class WebTrafficGenerator:
         axes_total.set_title("Page load time")
         axes_total.grid(True)
         
-        fig_total.savefig(os.path.join("Statistics","page_load_cdf.png"))
+        fig_total.savefig(os.path.join(self.out_stats_folder,"page_load_cdf.png"))
         
         axes_timings.set_ylim((0,1))
         axes_timings.set_xlabel("Milliseconds")
@@ -341,8 +345,8 @@ class WebTrafficGenerator:
         
         axes_timings_log.legend(loc='best')
     
-        fig_timings.savefig(os.path.join("Statistics","timings_cdf.png"))
-        fig_timings_log.savefig(os.path.join("Statistics","timings_cdf_log.png"))
+        fig_timings.savefig(os.path.join(self.out_stats_folder,"timings_cdf.png"))
+        fig_timings_log.savefig(os.path.join(self.out_stats_folder,"timings_cdf_log.png"))
         
 if __name__=="__main__":
     
