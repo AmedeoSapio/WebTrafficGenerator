@@ -356,8 +356,8 @@ if __name__=="__main__":
         
     parser.add_argument('--version',action='version',version='%(prog)s '+ version)
     
-    parser.add_argument('in_file', metavar='input_file', type=str, 
-                       help='History file.')                 
+    parser.add_argument('in_file', metavar='input_file', type=str,
+                       help='History file.')
     parser.add_argument('out_file', metavar='output_file', type=str,
                        help='output HAR file name.')
     parser.add_argument('--max-interval', metavar='<max_interval>', type=int, default = 30,
@@ -365,15 +365,15 @@ if __name__=="__main__":
     parser.add_argument('--timeout', metavar='<timeout>', type=int, default = 30,
                        help='timeout in seconds after declaring failed a visit. Default is 30 sec.')
     parser.add_argument('--headers', action='store_const', const=True, default=False,
-                       help='save headers of HTTP requests and responses in Har structs (e.g., to find referer field). Default is False.')
+                       help='save headers of HTTP requests and responses in Har structs (e.g., to find referer field).')
     parser.add_argument('--no-sleep', action='store_const', const=True, default=False,
-                       help='Do not sleep between requests. Default is False.')
+                       help='Do not sleep between requests.')
     parser.add_argument('--browsers', metavar='<number>', type=int, default = 3,
                        help='number of browsers to open. Default is 3')
     parser.add_argument('--limit-urls', metavar='<number>', type=int,
                        help='limit requests to <number> urls')
     parser.add_argument('--no-https', action='store_const', const=True, default=False,
-                       help='Do not replay pages on https. Default is False.')
+                       help='Do not replay pages on https.')
     
     args = vars(parser.parse_args())
     
