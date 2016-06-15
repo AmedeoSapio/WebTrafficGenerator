@@ -11,17 +11,17 @@ statistical distribution present in the provided timestamps.
 
 At the end of the simulation, the tool provides the graphs of:
 
-	- The distribution of the thinking time
-	- The distribution of the total page load time
-	- The distribution of the single resources timings:
-		- Blocked: time spent in a queue waiting for a network connection
-		- DNS: time required to resolve a host name
-		- Connect: time required to create TCP connection
-		- Send: time required to send the HTTP request to the server
-		- Wait: time spent waiting for a response from the server
-		- Receive: time required to read entire response from the server (or cache)
-		- SSL: time required for SSL/TLS negotiation. If present, this is also included 
-		in the connect time
+- The distribution of the thinking time
+- The distribution of the total page load time
+- The distribution of the single resources timings:
+	- Blocked: time spent in a queue waiting for a network connection
+	- DNS: time required to resolve a host name
+	- Connect: time required to create TCP connection
+	- Send: time required to send the HTTP request to the server
+	- Wait: time spent waiting for a response from the server
+	- Receive: time required to read entire response from the server (or cache)
+	- SSL: time required for SSL/TLS negotiation. If present, this is also included 
+	in the connect time
 
 Moreover a file with more detailed data on each requests is provided for further analysis. 
 The file contains a list of JSON objects in the form of [HTTP archive (HAR)](http://www.softwareishard.com/blog/har-12-spec/), containing 
@@ -67,24 +67,24 @@ web_traffic_generator.py [-h] [--version]
                                 input_file output_file
 ```
 Positional arguments:
-  - `input_file`              history file.
-  - `output_folder`           output folder name.
+- `input_file`              history file.
+- `output_folder`           output folder name.
 
 Optional arguments:
-  - `-h, --help`              show this help message and exit
-  - `--version`               show program's version number and exit
-  - `--max-interval <max_interval>`
-                               use statistical intervals with maximum value
-                               <max_interval> seconds. Default is 30 sec.
-  - `--timeout <timeout>`    timeout in seconds after declaring failed a visit.
-                               Default is 30 sec.
-  - `--headers`               save headers of HTTP requests and responses in the HAR
-                               structs (e.g., to find referer field).
-  - `--no-sleep`              do not sleep between requests.
-  - `--browsers <number>`    number of browsers to open (to simulate multi-tabbing).
-                                Default is 3
-  - `--limit-urls <number>`  limit requests to <number> urls
-  - `--no-https`              do not replay pages on https.
+- `-h, --help`              show this help message and exit
+- `--version`               show program's version number and exit
+- `--max-interval <max_interval>`
+                            use statistical intervals with maximum value
+                            <max_interval> seconds. Default is 30 sec.
+- `--timeout <timeout>`     timeout in seconds after declaring failed a visit.
+                            Default is 30 sec.
+- `--headers`               save headers of HTTP requests and responses in the HAR
+                            structs (e.g., to find referer field).
+- `--no-sleep`              do not sleep between requests.
+- `--browsers <number>`     number of browsers to open (to simulate multi-tabbing).
+                            Default is 3
+- `--limit-urls <number>`   limit requests to <number> urls
+- `--no-https`              do not replay pages on https.
 
 ## 4. Output format
 This tool creates a folder with the graphs of the timings distributions. In the same folder, it also creates an output file
@@ -100,10 +100,10 @@ The HAR parser has the following command line:
 HARparser.py [-h] [--version] [--no-https] input output_folder
 ```
 Positional arguments:
-  - `input`                HAR file, or folder with HAR files.
-  - `output_folder`       output statistics folder name.
+- `input`                HAR file, or folder with HAR files.
+- `output_folder`        output statistics folder name.
 
 Optional arguments:
-  - `-h, --help`          show this help message and exit
-  - `--version`           show program's version number and exit
-  - `--no-https`          do not plot requests on https.
+- `-h, --help`           show this help message and exit
+- `--version`            show program's version number and exit
+- `--no-https`           do not plot requests on https.
