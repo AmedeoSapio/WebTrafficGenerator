@@ -29,7 +29,7 @@ class WebTrafficGenerator:
         # Parse arguments
         self.urls_file = args['in_file']
         
-        self.out_stats_folder = args['out_folder']+"_stats"
+        self.out_stats_folder = args['out_folder']
         
         self.timeout = args['timeout']
         
