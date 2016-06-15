@@ -143,11 +143,11 @@ if __name__=="__main__":
     parser.add_argument('--version',action='version',version='%(prog)s '+ version)
     
     parser.add_argument('input', metavar='input', type=str, 
-                       help='HAR file or folder with HAR files.')
+                       help='HAR file, or folder with HAR files.')
     parser.add_argument('out_folder', metavar='output_folder', type=str,
                        help='output statistics folder name.')
     parser.add_argument('--no-https', action='store_const', const=True, default=False,
-                       help='Do not plot requests on https.')
+                       help='do not plot requests on https.')
     
     args = vars(parser.parse_args())
     

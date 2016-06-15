@@ -29,9 +29,7 @@ class WebTrafficGenerator:
         # Parse arguments
         self.urls_file = args['in_file']
         
-        self.out_file_name = args['out_file']
-        
-        self.out_stats_folder = self.out_file_name+"_stats"
+        self.out_stats_folder = args['out_folder']+"_stats"
         
         self.timeout = args['timeout']
         
@@ -114,7 +112,7 @@ class WebTrafficGenerator:
     
             # Plot history statistics
             self.plot_thinking_time_cdf()
-            self.plot_thinking_time_inverse_cdf()
+            #self.plot_thinking_time_inverse_cdf()
             
             # Start Proxy
             self.server = Server(self.browser_mob_proxy_location)
@@ -163,7 +161,7 @@ class WebTrafficGenerator:
                     self.hars.extend(browser_hars)
                 
                 # write HAR file
-                with open(self.out_file_name,"w") as f:
+                with open(os.path.join(self.out_stats_folder,"HARs.json"),"w") as f:
                     json.dump(self.hars,f)
                 
                 # Gather statistics
@@ -174,7 +172,8 @@ class WebTrafficGenerator:
                               "connect":[],
                               "send":[],
                               "wait":[],
-                              "receive":[]
+                              "receive":[],
+                              "ssl":[]
                               }
                 
                 for har in self.hars:
@@ -209,6 +208,9 @@ class WebTrafficGenerator:
                             # HTTP Response receive
                             if entry["timings"]["receive"]!=-1:
                                 self.stats["receive"].append(entry["timings"]["receive"])
+                                
+                            if entry["timings"]["ssl"]!=-1:
+                                self.stats["ssl"].append(entry["timings"]["ssl"])
                         
                 # Save statistics
                 self.plot_stats()
@@ -357,9 +359,9 @@ if __name__=="__main__":
     parser.add_argument('--version',action='version',version='%(prog)s '+ version)
     
     parser.add_argument('in_file', metavar='input_file', type=str,
-                       help='History file.')
-    parser.add_argument('out_file', metavar='output_file', type=str,
-                       help='output HAR file name.')
+                       help='history file.')
+    parser.add_argument('out_folder', metavar='output_folder', type=str,
+                       help='output folder name.')
     parser.add_argument('--max-interval', metavar='<max_interval>', type=int, default = 30,
                        help='use statistical intervals with maximum value <max_interval> seconds. Default is 30 sec.')
     parser.add_argument('--timeout', metavar='<timeout>', type=int, default = 30,
@@ -367,13 +369,13 @@ if __name__=="__main__":
     parser.add_argument('--headers', action='store_const', const=True, default=False,
                        help='save headers of HTTP requests and responses in Har structs (e.g., to find referer field).')
     parser.add_argument('--no-sleep', action='store_const', const=True, default=False,
-                       help='Do not sleep between requests.')
+                       help='do not sleep between requests.')
     parser.add_argument('--browsers', metavar='<number>', type=int, default = 3,
                        help='number of browsers to open. Default is 3')
     parser.add_argument('--limit-urls', metavar='<number>', type=int,
                        help='limit requests to <number> urls')
     parser.add_argument('--no-https', action='store_const', const=True, default=False,
-                       help='Do not replay pages on https.')
+                       help='do not replay pages on https.')
     
     args = vars(parser.parse_args())
     
