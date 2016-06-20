@@ -171,7 +171,10 @@ class Browser(Process):
             self.urls_queue.close()
             self.hars_queue.close()
             
-            self.driver.quit()
+            try:
+                self.driver.quit()
+            except AttributeError:
+                pass
             
             try:
                 self.proxy.close()
