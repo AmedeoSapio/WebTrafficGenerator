@@ -36,7 +36,11 @@ class Browser(Process):
         except Exception as e:
             print("Browser "+ str(self.id) +": Proxy server is offline: ", e)
             
-            self.barrier.wait()
+            try:
+                self.barrier.wait(3*self.timeout)
+            except BrokenBarrierError: 
+                print("Browser "+ str(self.id) +": Timed out waiting for a browser", e)
+                exit(1)
             
             self.proxy = self.server.create_proxy()
             
@@ -153,9 +157,6 @@ class Browser(Process):
                     self.start_browser()
                 
                 url = self.urls_queue.get()
-                
-            # Send back HARs
-            self.hars_queue.put(hars)
 
         except KeyboardInterrupt:
             pass
@@ -168,6 +169,9 @@ class Browser(Process):
             traceback.print_exc()
             
         finally:
+            # Send back HARs
+            self.hars_queue.put(hars)
+            
             self.urls_queue.close()
             self.hars_queue.close()
             
