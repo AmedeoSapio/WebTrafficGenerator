@@ -28,7 +28,7 @@ def parse_hars(hars, no_https):
             for entry in har["log"]["entries"]:
                 
                 if ((not no_https or not entry["request"]["url"].lower().startswith("https://")) and
-                    not "_error" in entry["response"]):
+                    "response" in entry and not "_error" in entry["response"]):
                 
                     # Queuing
                     if entry["timings"]["blocked"]!=-1:
